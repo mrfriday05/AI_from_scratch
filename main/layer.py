@@ -1,5 +1,6 @@
 import numpy as np
-import math
+
+
 class Layer:
     last_neuron_data: np.ndarray
 
@@ -18,11 +19,12 @@ class Layer:
         return v
 
     
-    def layer_bpropag(self, neurondeltas, previous_layer):
+    def layer_bpropag(self, neurondeltas, previous_layer_data):
+        delta = self.activation_derivative(self.last_neuron_data)
+        self.dbias += neurondeltas * delta
+        self.dmatrix += np.outer(neurondeltas * delta, previous_layer_data)
+        previous_neurondeltas = np.transpose(self.matrix) @ (neurondeltas * delta)
         
-        self.dbias += neurondeltas * self.activation_derivative(self.last_neuron_data)
-        self.dmatrix += np.outer(neurondeltas * self.activation_derivative(self.last_neuron_data), previous_layer)
-        previous_neurondeltas = np.transpose(self.matrix) @ (neurondeltas * self.activation_derivative(self.last_neuron_data))
 
         return(previous_neurondeltas)
         
@@ -39,7 +41,7 @@ class Layer:
             return(0)
         '''
         
-        return(1 / (1 + math.exp(-num)))
+        return(1 / (1 + np.exp(-num)))
     
     def activation_derivative(self,num) -> float:
         #if num >= 0:

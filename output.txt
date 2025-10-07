@@ -28,10 +28,10 @@ class Layer:
 
     
     def layer_bpropag(self, neurondeltas, previous_layer):
-        
-        self.dbias += neurondeltas * self.activation_derivative(self.last_neuron_data)
-        self.dmatrix += np.outer(neurondeltas * self.activation_derivative(self.last_neuron_data), previous_layer)
-        previous_neurondeltas = np.transpose(self.matrix) @ (neurondeltas * self.activation_derivative(self.last_neuron_data))
+        delta = self.activation_derivative(self.last_neuron_data)
+        self.dbias += neurondeltas * delta
+        self.dmatrix += np.outer(neurondeltas * delta, previous_layer)
+        previous_neurondeltas = np.transpose(self.matrix) @ (neurondeltas * delta)
 
         return(previous_neurondeltas)
         
@@ -56,22 +56,21 @@ class Layer:
         #else: 
         #    return(0)
         return(num * (1 - num))
-            #return -math.exp(-num) / ((1 + math.exp(-num))**2)
 
 ## main\main.py ##
 import numpy as np
 from network import Network
-import math
+# import math
 from layer import Layer
 
 #myNetwork = Network([2, 3, 8, 4])
 #myNetwork.compute(np.array([1,2]))
 
-
 myNetwork = Network([2, 4, 1])
 for _ in range(1000):
-    err = myNetwork.learn(np.array([[0, 0], [0, 1], [1, 0], [1, 1]]), np.array([[0], [1], [1], [0]]), 0.02)
+    err = myNetwork.learn(np.array([[0, 0], [0, 1], [1, 0], [1, 1]]), np.array([[0], [1], [1], [0]]), 0.0005)
     print(err)
+
 print(myNetwork.compute(np.array([1,0])))
 print(myNetwork.compute(np.array([0,0])))
 print(myNetwork.compute(np.array([1,1])))

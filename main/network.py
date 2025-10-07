@@ -19,9 +19,9 @@ class Network:
         err = 0
         for i in range (len(inputarr)):
             estimate = self.compute(inputarr[i])
-            neurondeltas = 2 * (outputarr[i] - estimate)
+            neurondeltas = 2 * (estimate-outputarr[i])
             err += np.sum((outputarr[i] - estimate)**2)
-            for j in range(len(self.layers)-2, 0, -1):
+            for j in range(len(self.layers) - 2, 0, -1):
                 neurondeltas = self.layerslst[j].layer_bpropag(neurondeltas, self.layerslst[j - 1].last_neuron_data)
             neurondeltas = self.layerslst[0].layer_bpropag(neurondeltas, inputarr[i])    
 
