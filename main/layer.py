@@ -24,8 +24,6 @@ class Layer:
         self.dbias += neurondeltas * delta
         self.dmatrix += np.outer(neurondeltas * delta, previous_layer_data)
         previous_neurondeltas = np.transpose(self.matrix) @ (neurondeltas * delta)
-        
-
         return(previous_neurondeltas)
         
     def modify(self, deltat, n):
