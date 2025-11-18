@@ -1,8 +1,8 @@
 import numpy as np
-from network import Network
+from neural_network.network import Network
 import matplotlib.pyplot as plt
 # import math
-from layer import Layer
+from neural_network.layer import Layer
 
 #myNetwork = Network([2, 3, 8, 4])
 #myNetwork.compute(np.array([1,2]))
@@ -15,8 +15,11 @@ ytab=[]
 errtab=[]
 outtab=[]
 
-myNetwork = Network([2, 4, 1])
-for i in range(10000):
+myNetwork = Network([{"neurons":2, "activation":None},
+                    {"neurons":6, "activation":"relu"},
+                    {"neurons":5, "activation":"sigmoid"},
+                    {"neurons":1, "activation":"sigmoid"}])
+for i in range(13000):
     err = myNetwork.learn(np.array([[0, 0], [0, 1], [1, 0], [1, 1]]), np.array([[0], [1], [1], [0]]), 1)
     if i%1000 == 0: print(f"Epoch: {i}, err: {err} ")
 print(myNetwork.compute(np.array([1,0])))

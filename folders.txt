@@ -1,2 +1,7 @@
-+main
--main/__pycache__
++ main.py
++ image_processing
++ neural_network
+- __pycache__
+- .git
+- .vscode
+- .claude

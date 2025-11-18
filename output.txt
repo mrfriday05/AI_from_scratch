@@ -1,110 +1,253 @@
 --- File Structure ---
-main/
+main.py
+data/
+  0/
+  1/
+  2/
+  3/
+  4/
+  5/
+  6/
+  7/
+  8/
+  9/
+image_processing/
+  image_import.py
+neural_network/
+  __init__.py
   layer.py
-  main.py
   network.py
 
 --- File Contents ---
 
+## .\main.py ##
+import numpy as np
+from neural_network.network import Network
+import matplotlib.pyplot as plt
+from neural_network.layer import Layer
+import image_processing.image_import as imp
+from pathlib import Path
+
+H = 28
+W = 28
+# training_length
+
+epochs=1000
+
+filepath = Path("data")
+x_data, y_data = imp.import_images(1, 10, filepath, H, W)
+
+split_index = int(len(x_data) * 0.8)
+x_train, y_train = x_data[:split_index], y_data[:split_index]
+x_test, y_test = x_data[split_index:], y_data[split_index:]
+
+print(f"\nTraining data shape: {x_train.shape}")
+print(f"Testing data shape: {x_test.shape}")
+
+myNetwork = Network([
+    {"neurons": H * W},
+    {"neurons": 128, "activation": "ReLu"},
+    {"neurons": 64, "activation": "ReLu"},
+    {"neurons": 10, "activation": "Softmax"}
+])
+
+print("\nNetwork Architecture:")
+print(myNetwork)
+
+# --- 3. Train the Network ---
+epochs = 50
+learning_rate = 0.1
+losses = []
+
+print("\nStarting training...")
+for i in range(epochs):
+    err = myNetwork.learn(x_train, y_train, learning_rate)
+    losses.append(err)
+    if (i + 1) % 5 == 0:
+        # Calculate accuracy on test set
+        correct_predictions = 0
+        for j in range(len(x_test)):
+            prediction = myNetwork.compute(x_test[j])
+            if np.argmax(prediction) == np.argmax(y_test[j]):
+                correct_predictions += 1
+        accuracy = (correct_predictions / len(x_test)) * 100
+        print(f"Epoch: {i+1}/{epochs}, Loss: {err:.4f}, Test Accuracy: {accuracy:.2f}%")
+
+print("Training complete.")
+
+# --- 4. Visualize Loss ---
+plt.plot(losses)
+plt.title("Training Loss")
+plt.xlabel("Epoch")
+plt.ylabel("Cross-Entropy Loss")
+plt.grid(True)
+plt.show()
+
+## .\image_processing\image_import.py ##
+import numpy as np
+import matplotlib.pyplot as plt
+import cv2
+import os
+from pathlib import Path
+
+digits_name = ['Zero', 'One', 'Two', 'Three', 'Four', 'Five', 'Six', 'Seven', 'Eight', 'Nine']
+
+def import_image(filepath: Path, width: int = 28, height: int = 28) -> np.ndarray:
+    image = cv2.imread(str(filepath), cv2.IMREAD_GRAYSCALE)
+    if image is None:
+        return None
+    resized = cv2.resize(image, (width, height), interpolation=cv2.INTER_NEAREST)
+    return resized
+
+
+def import_images(instances: int, start: int, filepath: Path, width: int = 28, height: int = 28) -> tuple[np.ndarray, np.ndarray]:
+    train_x_list = []
+    train_y_list = []
+    for i in range(10):
+        folder = filepath / str(i)
+        for k in range(start, start + instances):
+            image_path = folder / f"{digits_name[i]}_full ({k}).jpg"
+            img = import_image(image_path, width, height)
+
+            if img is not None:
+                train_x_list.append(img.flatten())
+                train_y_list.append(i)
+
+    train_x = np.array(train_x_list)
+    train_y = np.array(train_y_list)
+    return (train_x, train_y)
+
+## .\neural_network\__init__.py ##
+
+
+## .\neural_network\layer.py ##
 ## main\layer.py ##
 import numpy as np
-import math
+
 class Layer:
     last_neuron_data: np.ndarray
+    last_raw_data: np.ndarray
 
-    def __init__(self, dimin, dimout):
+    def __init__(self, dimin: int, dimout: int, activation: str = 'sigmoid'):
         self.matrix = 2 * np.random.rand(dimout, dimin) - 1
         self.dmatrix = np.zeros((dimout, dimin))
-        self.bias = 2*np.random.rand(dimout,) - 1
+        self.bias = 2 * np.random.rand(dimout,) - 1
         self.dbias = np.zeros((dimout,))
-        
+        # Robustly handle if activation is None (for input layer)
+        self.activation_fun = activation.lower() if activation else "linear"
+
+        if self.activation_fun not in ["softmax", "linear"]:
+            match self.activation_fun:
+                case "relu":
+                    self.vec_activation = np.vectorize(self.activation_relu)
+                    self.vec_activation_derivative = np.vectorize(self.activation_derivative_relu)
+                case "sigmoid":
+                    self.vec_activation = np.vectorize(self.activation_sigmoid)
+                    self.vec_activation_derivative = np.vectorize(self.activation_derivative_sigmoid)
+                
     def step(self, vectorIn):
-        v = self.matrix @ vectorIn
-        v += self.bias
-        for i, num in enumerate(v):
-            v[i] = self.activation(num)
+        v = self.matrix @ vectorIn + self.bias
+        self.last_raw_data = v
+        
+        if self.activation_fun == "softmax":
+            exps = np.exp(v - np.max(v)) # Numerically stable
+            v = exps / np.sum(exps)
+        elif self.activation_fun == "linear":
+            pass # No activation
+        else:
+            v = self.vec_activation(v)
+            
         self.last_neuron_data = v
         return v
 
-    
-    def layer_bpropag(self, neurondeltas, previous_layer):
-        delta = self.activation_derivative(self.last_neuron_data)
-        self.dbias += neurondeltas * delta
-        self.dmatrix += np.outer(neurondeltas * delta, previous_layer)
-        previous_neurondeltas = np.transpose(self.matrix) @ (neurondeltas * delta)
-
-        return(previous_neurondeltas)
+    def layer_bpropag(self, neurondeltas, previous_layer_data):
+        if self.activation_fun == "softmax":
+            delta = neurondeltas
+        elif self.activation_fun == "linear":
+            delta = neurondeltas # Derivative of linear is 1
+        else:
+            delta = self.vec_activation_derivative(self.last_neuron_data) * neurondeltas
+            
+        self.dbias += delta
+        self.dmatrix += np.outer(delta, previous_layer_data)
+        previous_neurondeltas = np.transpose(self.matrix) @ delta
+        return previous_neurondeltas
         
-    def modify(self, deltat, n):
-        self.matrix += self.dmatrix * deltat / n
+    def modify(self, deltat: float, n: int):
+        self.matrix -= self.dmatrix * deltat / n
         self.dmatrix *= 0
-        self.bias += self.dbias * deltat / n
+        self.bias -= self.dbias * deltat / n
         self.dbias *= 0
 
-    def activation(self,num) -> float:
-        '''if num > 0:
-            return num
-        else: 
-            return(0)
-        '''
+    def activation_relu(self, num: float) -> float:
+        return max(0, num)
+
+    def activation_sigmoid(self, num: float) -> float:
+        return 1 / (1 + np.exp(-num))
         
-        return(1 / (1 + math.exp(-num)))
-    
-    def activation_derivative(self,num) -> float:
-        #if num >= 0:
-        #    return 1
-        #else: 
-        #    return(0)
-        return(num * (1 - num))
+    def activation_derivative_relu(self, num: float) -> float:
+        # num is the activated value
+        return 1 if num > 0 else 0
+        
+    def activation_derivative_sigmoid(self, num: float) -> float:
+        # num is the activated value
+        return num * (1 - num)
 
-## main\main.py ##
-import numpy as np
-from network import Network
-# import math
-from layer import Layer
-
-#myNetwork = Network([2, 3, 8, 4])
-#myNetwork.compute(np.array([1,2]))
-
-myNetwork = Network([2, 4, 1])
-for _ in range(1000):
-    err = myNetwork.learn(np.array([[0, 0], [0, 1], [1, 0], [1, 1]]), np.array([[0], [1], [1], [0]]), 0.0005)
-    print(err)
-
-print(myNetwork.compute(np.array([1,0])))
-print(myNetwork.compute(np.array([0,0])))
-print(myNetwork.compute(np.array([1,1])))
-print(myNetwork.compute(np.array([0,1])))
-
+## .\neural_network\network.py ##
 ## main\network.py ##
 import numpy as np
-from layer import Layer
-import math
+from .layer import Layer
 
 class Network:
-    def __init__(self, layers):
+    def __init__(self, layers: dict):
         self.layers = layers
         self.layerslst = []
         for i in range(len(self.layers) - 1):
-            self.layerslst.append(Layer(dimin = self.layers[i], dimout = self.layers[i + 1]))
-         
-    def compute(self, inp):
+            self.layerslst.append(Layer(dimin=self.layers[i]['neurons'], 
+                                       dimout=self.layers[i+1]['neurons'], 
+                                       activation=self.layers[i+1].get('activation')))
+    
+    def compute(self, inp: np.ndarray) -> np.ndarray:
         for layer_ in self.layerslst:
             inp = layer_.step(inp)
-            #print(inp)
         return inp
     
-    def learn(self, inputarr, outputarr, deltat):
+    def learn(self, inputarr: np.ndarray, outputarr: np.ndarray, deltat: float) -> float:
         err = 0
-        for i in range (len(inputarr)):
-            estimate = self.compute(inputarr[i])
-            neurondeltas = 2 * (outputarr[i] - estimate)
-            err += np.sum((outputarr[i] - estimate)**2)
-            for j in range(len(self.layers)-2, 0, -1):
-                neurondeltas = self.layerslst[j].layer_bpropag(neurondeltas, self.layerslst[j - 1].last_neuron_data)
-            neurondeltas = self.layerslst[0].layer_bpropag(neurondeltas, inputarr[i])    
+        is_softmax_output = self.layerslst[-1].activation_fun == 'softmax'
 
-        for j in range(len(self.layerslst)):
-            self.layerslst[j].modify(deltat, len(inputarr)) 
+        for i in range(len(inputarr)):
+            estimate = self.compute(inputarr[i])
+            
+            if is_softmax_output:
+                # For Softmax, use Cross-Entropy loss derivative: (prediction - truth)
+                neurondeltas = estimate - outputarr[i]
+                # Calculate Cross-Entropy Loss for reporting
+                err += -np.sum(outputarr[i] * np.log(estimate + 1e-9)) 
+            else:
+                # For other activations, use Mean Squared Error derivative
+                neurondeltas = 2 * (estimate - outputarr[i])
+                err += np.sum((outputarr[i] - estimate)**2)
+
+            # Backpropagate the gradient
+            for j in range(len(self.layerslst) - 1, 0, -1):
+                neurondeltas = self.layerslst[j].layer_bpropag(neurondeltas, self.layerslst[j-1].last_neuron_data)
+            self.layerslst[0].layer_bpropag(neurondeltas, inputarr[i])    
+        
+        # Update weights after processing the batch
+        for layer_ in self.layerslst:
+            layer_.modify(deltat, len(inputarr)) 
+        
         return err / len(inputarr)
     
+    def __repr__(self):
+        parameters = 0
+        ret = ""
+        for i, layer in enumerate(self.layers):
+            ret += f"Layer {i}:\n\tNeurons: {layer['neurons']}\n"
+            if 'activation' in layer and layer['activation'] is not None:
+                ret += f"\tActivation: {layer['activation']}\n"
+            if i > 0:
+                parameters += self.layerslst[i-1].matrix.size + self.layerslst[i-1].bias.size
+        ret += f"Trainable parameters: {parameters}"
+        return ret

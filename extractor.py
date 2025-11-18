@@ -1,135 +1,125 @@
 import os
 import argparse
+import fnmatch
 
 def parse_rules(file_path):
     """
     Parses the rules file (e.g., folders.txt).
-    Lines starting with '+' are additions.
-    Lines starting with '-' are subtractions (exclusions).
-    Returns two lists: one for inclusions, one for exclusions.
+    Lines starting with '+' are additions, '-' are subtractions.
+    Wildcards like '*' and '?' are supported.
+    Returns a list of (type, pattern) tuples, preserving order.
     """
-    inclusions = []
-    exclusions = []
+    rules = []
     try:
         with open(file_path, 'r', encoding='utf-8') as f:
             for line in f:
                 stripped_line = line.strip()
                 if not stripped_line or stripped_line.startswith('#'):
                     continue
-                
-                # Normalize path separators for cross-platform consistency
-                path = os.path.normpath(stripped_line[1:])
 
-                if stripped_line.startswith('+'):
-                    inclusions.append(path)
-                elif stripped_line.startswith('-'):
-                    exclusions.append(path)
+                rule_type = stripped_line[0]
+                pattern = stripped_line[1:].strip()
+                
+                # Normalize path separators for cross-platform consistency in patterns
+                pattern = os.path.normpath(pattern)
+
+                if rule_type in ['+', '-'] and pattern:
+                    rules.append((rule_type, pattern))
                 else:
                     print(f"[Warning] Skipping invalid line in '{file_path}': {stripped_line}")
     except FileNotFoundError:
         print(f"[Error] The specified rule file was not found: '{file_path}'")
-        return None, None
+        return None
         
-    return inclusions, exclusions
+    return rules
 
-def should_process_path(path, inclusions, exclusions):
+def should_process_path(path, rules, is_dir=False):
     """
-    Determines if a given path should be processed based on inclusion/exclusion rules.
-    The most specific (longest) matching rule wins.
+    Determines if a given path should be processed based on the ordered rules.
+    The last rule in the list that matches the path determines the outcome.
+    
+    Args:
+        path (str): The file or directory path to check.
+        rules (list): A list of (type, pattern) tuples.
+        is_dir (bool): Flag indicating if the path is a directory. 
+                       Directories are traversed by default unless explicitly excluded.
+                       Files are not included by default unless explicitly included.
     """
     path = os.path.normpath(path)
-    
-    longest_incl = ""
-    longest_excl = ""
+    decision = None  # None: no matching rule yet, True: include, False: exclude.
 
-    for incl in inclusions:
-        if path.startswith(incl) and len(incl) > len(longest_incl):
-            longest_incl = incl
-    
-    for excl in exclusions:
-        if path.startswith(excl) and len(excl) > len(longest_excl):
-            longest_excl = excl
-            
-    # If the longest matching exclusion is more specific than the longest
-    # matching inclusion, we do not process the path.
-    if len(longest_excl) > len(longest_incl):
-        return False
-        
-    # If an inclusion rule matches (and was not overridden by a more specific
-    # exclusion), we process the path.
-    if longest_incl:
-        return True
-        
-    # Default case: if no rules match, don't process.
-    return False
+    # Collect all parts of the path to check against patterns.
+    # e.g., for "src/app/main.py", we check "main.py", "app", and "src".
+    # This allows a rule like "-__pycache__" to match a directory anywhere in the path.
+    parts_to_check = [os.path.basename(path)]
+    # Deconstruct the path for parent directory checks
+    head = path
+    while True:
+        head, tail = os.path.split(head)
+        if tail:
+            parts_to_check.append(tail)
+        else:
+            if head: # Handles root path component on Unix-like systems
+                parts_to_check.append(head)
+            break
+    parts_to_check.append(path) # Also check against the full path
 
-def walk_and_collect_structure(inclusions, exclusions):
+    for rule_type, pattern in rules:
+        # Check if the pattern matches any part of the path
+        if any(fnmatch.fnmatch(part, pattern) for part in parts_to_check):
+            decision = (rule_type == '+')
+    
+    # If no rule matched, apply default behavior
+    if decision is None:
+        return is_dir
+    
+    return decision
+
+def walk_and_collect_structure(rules):
     """
-    Walks the file system based on inclusion/exclusion rules and collects
-    the structure and file contents.
+    Walks the file system from the current directory based on rules and 
+    collects the structure and file contents.
     """
     structure = []
     file_contents = []
-    processed_paths = set()
+    start_dir = '.'  # Start from the current directory
 
-    # We only need to start walking from the top-level inclusion paths
-    # to avoid redundant work.
-    walk_roots = sorted([p for p in inclusions if not any(p.startswith(q) and p != q for q in inclusions)])
+    for root, dirs, files in os.walk(start_dir, topdown=True):
+        # Prune directories: A directory is entered unless a rule excludes it.
+        dirs[:] = [d for d in sorted(dirs) if should_process_path(os.path.join(root, d), rules, is_dir=True)]
+        
+        # Skip the root '.' directory from the visual output
+        if root == '.':
+            # Process files in the root directory
+            for file in sorted(files):
+                filepath = os.path.join(root, file)
+                if should_process_path(filepath, rules, is_dir=False):
+                    structure.append(file)
+                    try:
+                        with open(filepath, 'r', encoding='utf-8') as f:
+                            content = f.read()
+                    except Exception as e:
+                        content = f"[Error reading file: {e}]"
+                    file_contents.append((filepath, content))
+            continue # Move to the next iteration
 
-    for path in walk_roots:
-        if path in processed_paths:
-            continue
-            
-        if os.path.isfile(path):
-            if should_process_path(path, inclusions, exclusions):
-                structure.append(os.path.basename(path))
+        # Add directory structure
+        level = root.count(os.sep)
+        indent = '  ' * (level -1)
+        structure.append(f"{indent}{os.path.basename(root)}/")
+        
+        sub_indent = '  ' * level
+        # Process files: A file is included only if a rule includes it.
+        for file in sorted(files):
+            filepath = os.path.join(root, file)
+            if should_process_path(filepath, rules, is_dir=False):
+                structure.append(f"{sub_indent}{file}")
                 try:
-                    with open(path, 'r', encoding='utf-8') as f:
+                    with open(filepath, 'r', encoding='utf-8') as f:
                         content = f.read()
                 except Exception as e:
                     content = f"[Error reading file: {e}]"
-                file_contents.append((path, content))
-                processed_paths.add(path)
-            continue
-
-        if os.path.isdir(path):
-            for root, dirs, files in os.walk(path, topdown=True):
-                if not should_process_path(root, inclusions, exclusions):
-                    dirs[:] = []
-                    continue
-
-                if root not in processed_paths:
-                    level = root.replace(path, '').count(os.sep) if root != path else 0
-                    indent = '  ' * level
-                    structure.append(f"{indent}{os.path.basename(root)}/")
-                    processed_paths.add(root)
-                
-                sub_indent = '  ' * (level + 1)
-                
-                for file in sorted(files):
-                    filepath = os.path.join(root, file)
-                    if should_process_path(filepath, inclusions, exclusions):
-                        if filepath not in processed_paths:
-                            structure.append(f"{sub_indent}{file}")
-                            try:
-                                with open(filepath, 'r', encoding='utf-8') as f:
-                                    content = f.read()
-                            except Exception as e:
-                                content = f"[Error reading file: {e}]"
-                            file_contents.append((filepath, content))
-                            processed_paths.add(filepath)
-
-                dirs_to_keep = []
-                for d in sorted(dirs):
-                    dirpath = os.path.join(root, d)
-                    if should_process_path(dirpath, inclusions, exclusions) or \
-                       any(incl.startswith(dirpath) for incl in inclusions):
-                        dirs_to_keep.append(d)
-                dirs[:] = dirs_to_keep
-        else:
-            if path not in processed_paths:
-                structure.append(f"[Not found: {path}]")
-                processed_paths.add(path)
+                file_contents.append((filepath, content))
 
     return structure, file_contents
 
@@ -148,7 +138,7 @@ def write_output(output_path, structure, file_contents):
 if __name__ == "__main__":
     # --- Set up command-line argument parsing ---
     parser = argparse.ArgumentParser(
-        description="Extracts a project's structure and file contents into a single text file based on rules."
+        description="Extracts a project's structure and file contents into a single text file based on wildcard rules."
     )
     parser.add_argument(
         '-i', '--input',
@@ -168,16 +158,16 @@ if __name__ == "__main__":
     # --- End of argument parsing ---
 
     print(f"Reading rules from '{folders_txt}'...")
-    inclusions, exclusions = parse_rules(folders_txt)
+    rules = parse_rules(folders_txt)
     
     # Proceed only if the rules file was successfully read
-    if inclusions is not None:
-        print(f"Found {len(inclusions)} inclusion and {len(exclusions)} exclusion rules.")
+    if rules is not None:
+        print(f"Found {len(rules)} rules.")
         print("Processing...")
         
-        structure, contents = walk_and_collect_structure(inclusions, exclusions)
+        structure, contents = walk_and_collect_structure(rules)
         write_output(output_txt, structure, contents)
         
         print(f"\nSuccess! Project structure and contents written to '{output_txt}'.")
     
-    input("Press Enter to exit...")
+    # input("Press Enter to exit...") # Optional: uncomment to pause before exit
