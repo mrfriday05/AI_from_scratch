@@ -1,9 +1,10 @@
 ## main\network.py ##
 import numpy as np
 from .layer import Layer
+import json
 
 class Network:
-    def __init__(self, layers: dict):
+    def __init__(self, layers: list = []):
         self.layers = layers
         self.layerslst = []
         for i in range(len(self.layers) - 1):
@@ -55,3 +56,30 @@ class Network:
                 parameters += self.layerslst[i-1].matrix.size + self.layerslst[i-1].bias.size
         ret += f"Trainable parameters: {parameters}"
         return ret
+    
+    def get_network(self) -> dict:
+        outlst=[]
+        for layer in self.layerslst:
+            outlst.append(layer.get_layer())
+        return {"Meta" : "1.0",
+                "Data" : outlst,
+                "Layers" : self.layers}
+
+    def save_network(self, filename: str):
+        with open(f"networks/{filename}.json", "w") as f:
+            json.dump(self.get_network(), f, indent=4)
+        print(f"===== Model saved, filename: {filename}.json =====")
+
+    def load_network(self, filename):
+        with open(f"networks/{filename}.json", "r") as f:
+            data = json.load(f)
+        self.set_network(data)
+        print (f"===== Model loaded, filename:{filename} =====")
+
+    def set_network(self, data: dict):
+        if data["Meta"] == "1.0":
+            self.layers = data["Layers"]
+            for layer in data["Data"]:
+                layer_inst = Layer()
+                layer_inst.set_layer(layer)
+                self.layerslst.append(layer_inst)

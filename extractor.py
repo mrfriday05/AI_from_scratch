@@ -170,4 +170,4 @@ if __name__ == "__main__":
         
         print(f"\nSuccess! Project structure and contents written to '{output_txt}'.")
     
-    # input("Press Enter to exit...") # Optional: uncomment to pause before exit
+    input("Press Enter to exit...") # Optional: uncomment to pause before exit

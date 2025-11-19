@@ -13,16 +13,16 @@ H = 28
 W = 28
 # training_length
 
-filepath = Path("model1")
-x_train, y_train = imp.import_images(150, 1, filepath, H, W)
+filepath = Path("data")
+x_train, y_train = imp.import_images(1800, 170, filepath, H, W)
 
-x_test, y_test = imp.import_images(10, 300, filepath, H, W)
+x_test, y_test = imp.import_images(10, 151, filepath, H, W)
 
 print(f"\nTraining data shape: {x_train.shape}")
 print(f"Testing data shape: {x_test.shape}")
 
 load=True
-open_name="kuki"
+open_name="model1_4573321"
 if load:
     myNetwork=Network()
     myNetwork.load_network(open_name)
@@ -41,8 +41,8 @@ print(myNetwork)
 # --- 3. Train the Network ---
 save=True
 save_name="model1"
-epochs = 10000
-learning_rate = 0.1 
+epochs = 3300
+learning_rate = 0.2
 lr=learning_rate
 losses = []
 start=time.time()
@@ -50,7 +50,7 @@ start=time.time()
 print("\nStarting training...")
 for i in range(epochs):
     err = myNetwork.learn(x_train, y_train, lr)
-    lr = err*learning_rate*0.9+learning_rate*0.1
+    lr = err*learning_rate*0.8+learning_rate*0.2
     losses.append(err)
     if (i + 1) % 100 == 0:
         # Calculate accuracy on test set
@@ -63,7 +63,7 @@ for i in range(epochs):
         length=time.time()-start
         print(f"Epoch: {i+1}/{epochs}, Loss: {err:.4f}, Test Accuracy: {accuracy:.2f}%, Time: {length:.0f}s")
     
-    if (i+1) % 1000 == 0:
+    if (i+1) % 200 == 0:
         myNetwork.save_network(filename=f"{save_name}_{seed}")
 
 print("Training complete.")

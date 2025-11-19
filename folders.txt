@@ -1,7 +1,9 @@
 + main.py
++ example.py
 + image_processing
 + neural_network
 - __pycache__
 - .git
 - .vscode
 - .claude
+# FUCK THE POLICE!!!!

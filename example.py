@@ -16,7 +16,7 @@ errtab=[]
 outtab=[]
 
 myNetwork = Network([{"neurons":2, "activation":None},
-                    {"neurons":6, "activation":"relu"},
+                    {"neurons":4, "activation":"relu"},
                     {"neurons":5, "activation":"sigmoid"},
                     {"neurons":1, "activation":"sigmoid"}])
 for i in range(13000):

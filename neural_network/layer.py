@@ -5,22 +5,29 @@ class Layer:
     last_neuron_data: np.ndarray
     last_raw_data: np.ndarray
 
-    def __init__(self, dimin: int, dimout: int, activation: str = 'sigmoid'):
-        self.matrix = 2 * np.random.rand(dimout, dimin) - 1
+    def __init__(self, dimin: int = 0, dimout: int = 0, activation: str = 'sigmoid', matrix: np.ndarray = None, bias: np.ndarray = None):
+        if matrix is None:
+            self.matrix = 2 * np.random.rand(dimout, dimin) - 1  
+        else:
+            self.matrix = matrix 
         self.dmatrix = np.zeros((dimout, dimin))
-        self.bias = 2 * np.random.rand(dimout,) - 1
+
+        if bias is None:    
+            self.bias = 2 * np.random.rand(dimout,) - 1
+        else:
+            self.bias=bias
+
         self.dbias = np.zeros((dimout,))
         # Robustly handle if activation is None (for input layer)
         self.activation_fun = activation.lower() if activation else "linear"
-
         if self.activation_fun not in ["softmax", "linear"]:
             match self.activation_fun:
                 case "relu":
-                    self.vec_activation = np.vectorize(self.activation_relu)
-                    self.vec_activation_derivative = np.vectorize(self.activation_derivative_relu)
+                    self.vec_activation = np.vectorize(self.activation_relu, otypes=[float])
+                    self.vec_activation_derivative = np.vectorize(self.activation_derivative_relu, otypes=[float])
                 case "sigmoid":
-                    self.vec_activation = np.vectorize(self.activation_sigmoid)
-                    self.vec_activation_derivative = np.vectorize(self.activation_derivative_sigmoid)
+                    self.vec_activation = np.vectorize(self.activation_sigmoid, otypes=[float])
+                    self.vec_activation_derivative = np.vectorize(self.activation_derivative_sigmoid, otypes=[float])
                 
     def step(self, vectorIn):
         v = self.matrix @ vectorIn + self.bias
@@ -69,3 +76,19 @@ class Layer:
     def activation_derivative_sigmoid(self, num: float) -> float:
         # num is the activated value
         return num * (1 - num)
+    
+    def get_layer(self) -> dict:
+        matrix=self.matrix.tolist()
+        bias=self.bias.tolist()
+        return {
+            "Matrix" : matrix,
+            "Bias" : bias,
+            "Activation" : self.activation_fun
+        }
+
+    def set_layer(self, data: dict):
+        self.__init__(dimin = len(data["Matrix"][0]),
+                      dimout = len(data["Matrix"]), 
+                      activation = data["Activation"],
+                      matrix = np.array(data["Matrix"]),
+                      bias = np.array(data["Bias"]))

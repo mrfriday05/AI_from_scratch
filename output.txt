@@ -1,4 +1,5 @@
 --- File Structure ---
+example.py
 main.py
 data/
   0/
@@ -20,6 +21,49 @@ neural_network/
 
 --- File Contents ---
 
+## .\example.py ##
+import numpy as np
+from neural_network.network import Network
+import matplotlib.pyplot as plt
+# import math
+from neural_network.layer import Layer
+
+#myNetwork = Network([2, 3, 8, 4])
+#myNetwork.compute(np.array([1,2]))
+fig, ax = plt.subplots()
+
+errors=[]
+N=100
+xtab=[]
+ytab=[]
+errtab=[]
+outtab=[]
+
+myNetwork = Network([{"neurons":2, "activation":None},
+                    {"neurons":4, "activation":"relu"},
+                    {"neurons":5, "activation":"sigmoid"},
+                    {"neurons":1, "activation":"sigmoid"}])
+for i in range(13000):
+    err = myNetwork.learn(np.array([[0, 0], [0, 1], [1, 0], [1, 1]]), np.array([[0], [1], [1], [0]]), 1)
+    if i%1000 == 0: print(f"Epoch: {i}, err: {err} ")
+print(myNetwork.compute(np.array([1,0])))
+print(myNetwork.compute(np.array([0,0])))
+print(myNetwork.compute(np.array([1,1])))
+print(myNetwork.compute(np.array([0,1])))
+
+for x in range (N+1):
+    for y in range (N+1):
+        xtab.append(x/N)
+        ytab.append(y/N)
+        inp=np.array([x/N,y/N])
+        outtab.append(myNetwork.compute(inp))
+
+
+#plt.plot(errors)
+sc = ax.scatter(xtab, ytab, c=outtab, cmap='viridis', s=8)
+plt.colorbar(sc, label='Output')
+plt.show()
+
 ## .\main.py ##
 import numpy as np
 from neural_network.network import Network
@@ -32,10 +76,8 @@ H = 28
 W = 28
 # training_length
 
-epochs=1000
-
 filepath = Path("data")
-x_data, y_data = imp.import_images(1, 10, filepath, H, W)
+x_data, y_data = imp.import_images(1, 300, filepath, H, W)
 
 split_index = int(len(x_data) * 0.8)
 x_train, y_train = x_data[:split_index], y_data[:split_index]
@@ -46,8 +88,8 @@ print(f"Testing data shape: {x_test.shape}")
 
 myNetwork = Network([
     {"neurons": H * W},
-    {"neurons": 128, "activation": "ReLu"},
-    {"neurons": 64, "activation": "ReLu"},
+    {"neurons": 128, "activation": "Sigmoid"},
+    {"neurons": 64, "activation": "Sigmoid"},
     {"neurons": 10, "activation": "Softmax"}
 ])
 
@@ -55,7 +97,7 @@ print("\nNetwork Architecture:")
 print(myNetwork)
 
 # --- 3. Train the Network ---
-epochs = 50
+epochs = 5000
 learning_rate = 0.1
 losses = []
 
@@ -63,7 +105,7 @@ print("\nStarting training...")
 for i in range(epochs):
     err = myNetwork.learn(x_train, y_train, learning_rate)
     losses.append(err)
-    if (i + 1) % 5 == 0:
+    if (i + 1) % 100 == 0:
         # Calculate accuracy on test set
         correct_predictions = 0
         for j in range(len(x_test)):
@@ -97,7 +139,7 @@ def import_image(filepath: Path, width: int = 28, height: int = 28) -> np.ndarra
     if image is None:
         return None
     resized = cv2.resize(image, (width, height), interpolation=cv2.INTER_NEAREST)
-    return resized
+    return resized / 255.0
 
 
 def import_images(instances: int, start: int, filepath: Path, width: int = 28, height: int = 28) -> tuple[np.ndarray, np.ndarray]:
@@ -111,7 +153,13 @@ def import_images(instances: int, start: int, filepath: Path, width: int = 28, h
 
             if img is not None:
                 train_x_list.append(img.flatten())
-                train_y_list.append(i)
+                ret = []
+                for l in range(10):
+                    if l == i:
+                        ret.append(1)
+                    else:
+                        ret.append(0)
+                train_y_list.append(ret)
 
     train_x = np.array(train_x_list)
     train_y = np.array(train_y_list)
@@ -139,11 +187,11 @@ class Layer:
         if self.activation_fun not in ["softmax", "linear"]:
             match self.activation_fun:
                 case "relu":
-                    self.vec_activation = np.vectorize(self.activation_relu)
-                    self.vec_activation_derivative = np.vectorize(self.activation_derivative_relu)
+                    self.vec_activation = np.vectorize(self.activation_relu, otypes=[float])
+                    self.vec_activation_derivative = np.vectorize(self.activation_derivative_relu, otypes=[float])
                 case "sigmoid":
-                    self.vec_activation = np.vectorize(self.activation_sigmoid)
-                    self.vec_activation_derivative = np.vectorize(self.activation_derivative_sigmoid)
+                    self.vec_activation = np.vectorize(self.activation_sigmoid, otypes=[float])
+                    self.vec_activation_derivative = np.vectorize(self.activation_derivative_sigmoid, otypes=[float])
                 
     def step(self, vectorIn):
         v = self.matrix @ vectorIn + self.bias
