@@ -7,22 +7,22 @@ from pathlib import Path
 import random
 import time
 
-seed = random.randint(1000000, 9999999)
+seed = random.randint(1000, 9999)
 
 H = 28
 W = 28
 # training_length
 
 filepath = Path("data")
-x_train, y_train = imp.import_images(1800, 170, filepath, H, W)
+x_train, y_train = imp.import_images(2000, 16, filepath, H, W)
 
-x_test, y_test = imp.import_images(10, 151, filepath, H, W)
+x_test, y_test = imp.import_images(10, 1, filepath, H, W)
 
 print(f"\nTraining data shape: {x_train.shape}")
 print(f"Testing data shape: {x_test.shape}")
 
 load=True
-open_name="model1_4573321"
+open_name="model1_6090"
 if load:
     myNetwork=Network()
     myNetwork.load_network(open_name)
@@ -41,8 +41,8 @@ print(myNetwork)
 # --- 3. Train the Network ---
 save=True
 save_name="model1"
-epochs = 3300
-learning_rate = 0.2
+epochs = 1000
+learning_rate = 0.15
 lr=learning_rate
 losses = []
 start=time.time()
